@@ -48,6 +48,6 @@ if __name__ == '__main__':
 
     x_train, y_train, x_test, y_test = create_data_generator(NUM_CLASSES)
     model = create_model(NUM_CLASSES)
-    model = train(model, x_train, y_train, x_test, y_test, NUM_EPOCHS, NUM_BATCHES)
+    model = train(model, x_train, y_train, x_test, y_test, NUM_EPOCHS, BATCH_SIZE)
     save_model(model)
     
