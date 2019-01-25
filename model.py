@@ -12,13 +12,13 @@ from keras.preprocessing.image import ImageDataGenerator
 # hyperparameters
 BATCH_SIZE = 32
 NUM_CLASSES = 10
-NUM_EPOCHS = 20
+NUM_EPOCHS = 30
 
-def create_data_generator():
+def create_data_generator(num_classes):
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
     
-    y_train = np_utils.to_categorical(y_train, NUM_CLASSES)
-    y_test = np_utils.to_categorical(y_test, NUM_CLASSES)
+    y_train = np_utils.to_categorical(y_train, num_classes)
+    y_test = np_utils.to_categorical(y_test, num_classes)
     
     x_train = x_train.astype('float32')
     x_test = x_test.astype('float32')
@@ -28,16 +28,16 @@ def create_data_generator():
 
     return x_train, y_train, x_test, y_test
 
-def create_model():
+def create_model(num_classes):
     img_input = Input(shape=(32, 32, 3))
     
-    model = MobileNet(input_tensor=img_input, classes=NUM_CLASSES, weights=None)
+    model = MobileNet(input_tensor=img_input, classes=num_classes, weights=None)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
     return model
 
-def train(model, x_train, y_train, x_test, y_test):
-    model.fit(x_train, y_train, batch_size=BATCH_SIZE, epochs=NUM_EPOCHS, validation_data=(x_test, y_test), shuffle=True, verbose=1)
+def train(model, x_train, y_train, x_test, y_test, num_epochs, batch_size):
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=num_epochs, validation_data=(x_test, y_test), shuffle=True, verbose=2)
     
     return model
 
@@ -46,8 +46,8 @@ def save_model(model):
     
 if __name__ == '__main__':
 
-    x_train, y_train, x_test, y_test = create_data_generator()
-    model = create_model()
-    model = train(model, x_train, y_train, x_test, y_test)
+    x_train, y_train, x_test, y_test = create_data_generator(NUM_CLASSES)
+    model = create_model(NUM_CLASSES)
+    model = train(model, x_train, y_train, x_test, y_test, NUM_EPOCHS, NUM_BATCHES)
     save_model(model)
     
