@@ -4,14 +4,16 @@
 # 3-> iterative least likely class method
 
 # imports
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from keras.models import load_model
 from keras.datasets import cifar10
 from keras import backend as K
 import numpy as np
 import random
 
-MODEL_NAME = 'mobile_net_cifar10.h5'
-EPSILONS = [x/10 for x in range(10,25)] # co-efficients of perturbation
+MODEL_NAME = 'model_cifar10.h5'
+EPSILONS = [x/10 for x in range(0,20)] # co-efficients of perturbation
 NUM_CLASSES = 10
 
 def load_data(num_classes):
@@ -23,10 +25,9 @@ def load_data(num_classes):
     assert len(x_train) == len(y_train)
   
     x_train = x_train.astype('float32')
-    x_train /= 255
+    x_train /= 255.0
 
     # each image is of shape 32x32x3
-  
     total_images = len(y_train)
     
     x = dict() # key is category, value is list of images in that category
@@ -42,19 +43,20 @@ def load_data(num_classes):
     
     return x
 
-def get_pure_examples(examples, num_examples, category):
+def get_pure_examples(examples, num_examples, class_):
     '''
     num_examples defines the no. of images to be returned
     category defines the class to which the images belong
     '''
     low_limit = random.randint(0,len(examples)-num_examples-1)
-    pure_examples = examples[str(category)][low_limit:low_limit+num_examples]
+    pure_examples = examples[str(class_)][low_limit:low_limit+num_examples]
+
     for i in range(0,len(pure_examples)):
         pure_examples[i] = np.array([pure_examples[i]])
 
     return pure_examples
 
-def compute_gradient_sign(model, x, y_true, delta=1e-3):
+def compute_gradient_sign(model, x, y_true, delta=1e-4):
     '''
     returns gradient of loss w.r.t the example => (x, y_true)
     '''
@@ -75,39 +77,70 @@ def compute_gradient_sign(model, x, y_true, delta=1e-3):
     else:
         return -1 # negative gradient
 
-def least_likely_class(model, example):
+def least_likely_class(model, examples, class_):
     '''
-    returns least likely class for a given example, an integer between [0,NUM_CLASSES).
+    returns least likely class for a given class by selecting a random example of class_, 
+    returns an integer between [0,NUM_CLASSES).
     '''
+    example = get_pure_examples(examples, 1, class_)
+    example = example[0]
     preds = model.predict(example)
-    return np.argmin(preds[0])
+    ll_class = np.argmin(preds[0])
+    return ll_class
 
 
-def fast_gradient_sign(model, example, category, epsilon):
+def fast_gradient_sign(model, example, class_, epsilon):
     '''
-    returns an adversarial example.
+    returns an adversarial example by morphing example with epsilon multiplied by gradient sign.
     '''
-    gradient_sign = compute_gradient_sign(model, example, category) # returns 1 or -1
+    gradient_sign = compute_gradient_sign(model, example, class_) # returns 1 or -1
 
     epsilon *= gradient_sign
 
-    return np.add(example, epsilon)
+    adv_example = np.add(example, epsilon)
+    adv_example = np.clip(adv_example, 0, 1)
 
-def basic_iterative(model, example, category, epsilon, num_iterations):
+    return adv_example
+
+def basic_iterative(model, example, class_, alpha, epsilon, num_iterations):
+    '''
+    returns an adversarial example similar to fast_gradient_sign() but iteratively updates to better the adversary.
+    '''
+    adv_example = example
+
+    for _ in range(0, num_iterations):
+        gradient_sign = compute_gradient_sign(model, adv_example, class_) # returns 1 or -1
+        alpha *= gradient_sign
+        adv_example = np.add(adv_example, alpha)
+
+        # clip to keep it within epsilon neighborhood
+        adv_example = np.clip(adv_example, 0, 1)
+        
+    return adv_example
+
+def iterative_least_likely_class(model, examples, target_class, alpha, epsilon, num_iterations):
     '''
     returns an adversarial example.
+    this is a targeted attack.
+    adversairal example belongs to the least likely class for a given target category. we use least_likely_class() for this.
     '''
-    pass
+    # get l.l. class and l.l. example for target_class
+    ll_class = least_likely_class(model, examples, target_class)
+    ll_class_example = get_pure_examples(examples, 1, ll_class)
 
-def iterative_least_likely_class(model, example, epsilon, num_iterations):
-    '''
-    returns an adversarial example.
-    Note: example should be of the least likely class for a given target category. use least_likely_class(...) for this.
-    '''
-    pass
+    # iteratively update ll_class_example making a better adversary
+    adv_example = ll_class_example
 
+    for _ in range(0, num_iterations):
+        gradient_sign = compute_gradient_sign(model, adv_example, ll_class) # returns 1 or -1
+        alpha *= gradient_sign
+        adv_example = np.add(adv_example, alpha)
 
-
+        # clip to keep it within epsilon neighborhood
+        adv_example = np.clip(adv_example, 0, 1)
+        
+    return adv_example
+    
 if __name__ == '__main__':
     model = load_model(MODEL_NAME)
     examples = load_data(NUM_CLASSES)
